@@ -38,7 +38,8 @@ pub fn getauxval_hwcap() -> u64 {
 }
 
 // Apple platform's runtime detection of target CPU features using `sysctlbyname`.
-#[cfg(target_vendor = "apple")]
+// Windows platform's runtime detection of target CPU features using `IsProcessorFeaturePresent`.
+#[cfg(any(target_vendor = "apple", target_os = "windows"))]
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __detect_target_features {
@@ -148,8 +149,45 @@ pub unsafe fn sysctlbyname(name: &[u8]) -> bool {
     value != 0
 }
 
+// Windows on Arm `check!` macro.
+#[cfg(target_os = "windows")]
+#[macro_export]
+#[doc(hidden)]
+macro_rules! check {
+    ("aes") => {
+        is_crypto_instructions_available()
+    };
+    ("sha2") => {
+        is_crypto_instructions_available()
+    };
+    ("sha3") => {
+        false
+    };
+    ("sm4") => {
+        false
+    };
+}
+
+/// Windows helper function for calling `IsProcessorFeaturePresent`.
+#[cfg(target_os = "windows")]
+pub fn is_crypto_instructions_available() -> bool {
+    type DWORD = u32;
+    type BOOL = i32;
+    const PF_ARM_V8_CRYPTO_INSTRUCTIONS_AVAILABLE: u32 = 30;
+    extern "system" {
+        pub fn IsProcessorFeaturePresent(ProcessorFeature: DWORD) -> BOOL;
+    }
+
+    unsafe { IsProcessorFeaturePresent(PF_ARM_V8_CRYPTO_INSTRUCTIONS_AVAILABLE) != 0 }
+}
+
 // On other targets, runtime CPU feature detection is unavailable
-#[cfg(not(any(target_vendor = "apple", target_os = "linux", target_os = "android",)))]
+#[cfg(not(any(
+    target_vendor = "apple",
+    target_os = "linux",
+    target_os = "android",
+    target_os = "windows"
+)))]
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __detect_target_features {
